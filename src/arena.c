@@ -219,7 +219,7 @@ void* mi_arena_block_start(mi_arena_t* arena, mi_bitmap_index_t bindex) {
 // claim the `blocks_inuse` bits
 static bool mi_arena_try_claim(mi_arena_t* arena, size_t blocks, mi_bitmap_index_t* bitmap_idx)
 {
-  size_t idx = /*0;  */mi_atomic_load_relaxed(&arena->search_idx);  // start from last search; ok to be relaxed as the exact start does not matter
+  size_t idx = 0; // mi_atomic_load_relaxed(&arena->search_idx);  // start from last search; ok to be relaxed as the exact start does not matter
   if (_mi_bitmap_try_find_from_claim_across(arena->blocks_inuse, arena->field_count, idx, blocks, bitmap_idx)) {
     mi_atomic_store_relaxed(&arena->search_idx, mi_bitmap_index_field(*bitmap_idx));  // start search from found location next time around
     return true;
@@ -235,19 +235,16 @@ static bool mi_arena_try_claim(mi_arena_t* arena, size_t blocks, mi_bitmap_index
 static mi_decl_noinline void* mi_arena_try_alloc_at(mi_arena_t* arena, size_t arena_index, size_t needed_bcount,
                                                     bool commit, mi_memid_t* memid)
 {
-  // _mi_verbose_message("\t\t\t[mi_arena_try_alloc_at] start. arenaID:%d arena_index:%ld needed_bcount:%ld commit:%d memid:%ld\n",arena->id,arena_index,needed_bcount,commit,memid);
   MI_UNUSED(arena_index);
   mi_assert_internal(mi_arena_id_index(arena->id) == arena_index);
 
   mi_bitmap_index_t bitmap_index;
   if (!mi_arena_try_claim(arena, needed_bcount, &bitmap_index)) return NULL;
-  // _mi_verbose_message("\t\t\t[mi_arena_try_alloc_at] after mi_arena_try_claim.\n");
 
   // claimed it!
   void* p = mi_arena_block_start(arena, bitmap_index);
   *memid = mi_memid_create_arena(arena->id, arena->exclusive, bitmap_index);
   memid->is_pinned = arena->memid.is_pinned;
-  // _mi_verbose_message("\t\t\t[mi_arena_try_alloc_at]\tp:%ld\tmemid:%ld\n",p,memid);
 
   // none of the claimed blocks should be scheduled for a decommit
   if (arena->blocks_purge != NULL) {
@@ -264,7 +261,6 @@ static mi_decl_noinline void* mi_arena_try_alloc_at(mi_arena_t* arena, size_t ar
   if (arena->blocks_committed == NULL) {
     // always committed
     memid->initially_committed = true;
-    // _mi_verbose_message("\t\t\t[mi_arena_try_alloc_at] arena->blocks_committed == NULL. this is memory that cannot be decommitted\n");
   }
   else if (commit) {
     // commit requested, but the range may not be committed as a whole: ensure it is committed now
@@ -308,8 +304,6 @@ static mi_decl_noinline void* mi_arena_try_alloc_at(mi_arena_t* arena, size_t ar
 static void* mi_arena_try_alloc_at_id(mi_arena_id_t arena_id, bool match_numa_node, int numa_node, size_t size, size_t alignment,
                                        bool commit, bool allow_large, mi_arena_id_t req_arena_id, mi_memid_t* memid )
 {
-  // _mi_verbose_message("\n\t\t[mi_arena_try_alloc_at_id]  arena_id:%d match_numa_node:%d numa_node:%d\tsize:%ld\talignment:%ld\tcommit:%d allow_large:%d req_arena_id:%d memid:%ld\n",
-  //   arena_id,match_numa_node,numa_node,size,alignment,commit,allow_large,req_arena_id,memid);
   MI_UNUSED_RELEASE(alignment);
   mi_assert(alignment <= MI_SEGMENT_ALIGN);
   const size_t bcount = mi_block_count_of_size(size);
@@ -328,7 +322,6 @@ static void* mi_arena_try_alloc_at_id(mi_arena_id_t arena_id, bool match_numa_no
                     else { if (numa_suitable) return NULL; }
   }
 
-  // _mi_verbose_message("\t\t[mi_arena_try_alloc_at_id] try mi_arena_try_alloc_at.\n");
   // try to allocate
   void* p = mi_arena_try_alloc_at(arena, arena_index, bcount, commit, memid);
   mi_assert_internal(p == NULL || _mi_is_aligned(p, alignment));
